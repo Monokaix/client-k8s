@@ -6,11 +6,9 @@ import (
 	"fmt"
 	"math/rand"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -20,7 +18,7 @@ func main() {
 	var (
 		workNum      = 1
 		watchWorkNum = 1
-		qps          = 200
+		qps          = 500
 		burst        = 500
 	)
 	flag.IntVar(&workNum, "worker", workNum, "number of current list workers")
@@ -63,22 +61,20 @@ func list(clientSet *kubernetes.Clientset, wg *sync.WaitGroup, worker int) {
 				// Examples for error handling:
 				// - Use helper functions like e.g. errors.IsNotFound()
 				// - And/or cast to StatusError and use its properties like e.g. ErrStatus.Message
-				namespace := "test"
-				n := rand.Intn(100)
-				pod := "test-" + strconv.Itoa(n)
-				_, err = clientSet.CoreV1().Pods(namespace).Get(context.TODO(), pod, metav1.GetOptions{})
-				if errors.IsNotFound(err) {
-					fmt.Printf("Pod %s in namespace %s not found\n", pod, namespace)
-				} else if statusError, isStatus := err.(*errors.StatusError); isStatus {
-					fmt.Printf("Error getting pod %s in namespace %s: %v\n",
-						pod, namespace, statusError.ErrStatus.Message)
-				} else if err != nil {
-					panic(err.Error())
-				} else {
-					fmt.Printf("Found pod %s in namespace %s\n", pod, namespace)
-				}
-
-				time.Sleep(100 * time.Millisecond)
+				//namespace := "test"
+				//n := rand.Intn(100)
+				//pod := "test-" + strconv.Itoa(n)
+				//_, err = clientSet.CoreV1().Pods(namespace).Get(context.TODO(), pod, metav1.GetOptions{})
+				//if errors.IsNotFound(err) {
+				//	fmt.Printf("Pod %s in namespace %s not found\n", pod, namespace)
+				//} else if statusError, isStatus := err.(*errors.StatusError); isStatus {
+				//	fmt.Printf("Error getting pod %s in namespace %s: %v\n",
+				//		pod, namespace, statusError.ErrStatus.Message)
+				//} else if err != nil {
+				//	panic(err.Error())
+				//} else {
+				//	fmt.Printf("Found pod %s in namespace %s\n", pod, namespace)
+				//}
 			}
 		}()
 	}
@@ -88,13 +84,16 @@ func watch(clientSet *kubernetes.Clientset, wg *sync.WaitGroup, worker int) {
 	for i := 0; i < worker; i++ {
 		wg.Add(1)
 		go func() {
-			watch, err := clientSet.CoreV1().Pods("test").Watch(context.TODO(), metav1.ListOptions{})
-			if err != nil {
-				panic(err.Error())
-			}
-			select {
-			case e := <-watch.ResultChan():
-				fmt.Println(e)
+			for {
+				watch, err := clientSet.CoreV1().Pods("test").Watch(context.TODO(), metav1.ListOptions{})
+				if err != nil {
+					panic(err.Error())
+				}
+				fmt.Println("watch...")
+				select {
+				case _ = <-watch.ResultChan():
+					fmt.Println("Got one event")
+				}
 			}
 		}()
 	}
