@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"math/rand"
 	"os"
@@ -16,22 +17,34 @@ import (
 )
 
 func main() {
+	var (
+		workNum      = 1
+		watchWorkNum = 1
+		qps          = 200
+		burst        = 500
+	)
+	flag.IntVar(&workNum, "worker", workNum, "number of current list workers")
+	flag.IntVar(&watchWorkNum, "watchWorker", watchWorkNum, "number of current watch workers")
+	flag.IntVar(&qps, "qps", qps, "kube client qps")
+	flag.IntVar(&burst, "burst", burst, "kube client burst")
+	flag.Parse()
+
 	rand.Seed(time.Now().UnixNano())
 	var waitGroup sync.WaitGroup
-	var workNum = 1
 	// use the current context in kubeconfig
 	config, err := clientcmd.BuildConfigFromFlags("", getKubeConfigPath())
 	if err != nil {
 		panic(err.Error())
 	}
-
+	config.QPS = float32(qps)
+	config.Burst = burst
 	// create the clientSet
 	clientSet, err := kubernetes.NewForConfig(config)
 	if err != nil {
 		panic(err.Error())
 	}
 	list(clientSet, &waitGroup, workNum)
-	watch(clientSet, &waitGroup, workNum)
+	watch(clientSet, &waitGroup, watchWorkNum)
 
 	waitGroup.Wait()
 }
@@ -65,7 +78,7 @@ func list(clientSet *kubernetes.Clientset, wg *sync.WaitGroup, worker int) {
 					fmt.Printf("Found pod %s in namespace %s\n", pod, namespace)
 				}
 
-				time.Sleep(2 * time.Second)
+				time.Sleep(100 * time.Millisecond)
 			}
 		}()
 	}
@@ -79,11 +92,9 @@ func watch(clientSet *kubernetes.Clientset, wg *sync.WaitGroup, worker int) {
 			if err != nil {
 				panic(err.Error())
 			}
-			for {
-				select {
-				case e := <-watch.ResultChan():
-					fmt.Println(e)
-				}
+			select {
+			case e := <-watch.ResultChan():
+				fmt.Println(e)
 			}
 		}()
 	}
