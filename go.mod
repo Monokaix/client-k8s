@@ -1,4 +1,4 @@
-module client-k8s
+module monokai.io/client-k8s
 
 go 1.16
 
